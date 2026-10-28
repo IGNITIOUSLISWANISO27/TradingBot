@@ -1,0 +1,163 @@
+{
+  "markets": [
+    {
+      "symbol": "1HZ15V",
+      "name": "Volatility 15 (1s) Index",
+      "timeframe": 3600
+    }
+  ],
+  "strategies": [
+    {
+      "id": "c-fvg",
+      "name": "Fair value gap retest",
+      "buy": [
+        {
+          "a": {
+            "t": "fvgbull"
+          },
+          "op": "on"
+        }
+      ],
+      "sell": [
+        {
+          "a": {
+            "t": "fvgbear"
+          },
+          "op": "on"
+        }
+      ],
+      "sl": {
+        "mult": 0.1,
+        "unit": "zone"
+      },
+      "tp": {
+        "mult": 2,
+        "unit": "rr"
+      }
+    },
+    {
+      "id": "c-ob",
+      "name": "Order block retest",
+      "buy": [
+        {
+          "a": {
+            "t": "obbull"
+          },
+          "op": "on"
+        }
+      ],
+      "sell": [
+        {
+          "a": {
+            "t": "obbear"
+          },
+          "op": "on"
+        }
+      ],
+      "sl": {
+        "mult": 0.1,
+        "unit": "zone"
+      },
+      "tp": {
+        "mult": 2,
+        "unit": "rr"
+      }
+    },
+    {
+      "id": "c-fib",
+      "name": "Fibonacci golden zone",
+      "buy": [
+        {
+          "a": {
+            "t": "fibbull"
+          },
+          "op": "on"
+        }
+      ],
+      "sell": [
+        {
+          "a": {
+            "t": "fibbear"
+          },
+          "op": "on"
+        }
+      ],
+      "sl": {
+        "mult": 0.1,
+        "unit": "zone"
+      },
+      "tp": {
+        "mult": 2,
+        "unit": "rr"
+      }
+    },
+    {
+      "id": "c-sr",
+      "name": "Support and resistance rejection",
+      "buy": [
+        {
+          "a": {
+            "t": "srbull"
+          },
+          "op": "on"
+        }
+      ],
+      "sell": [
+        {
+          "a": {
+            "t": "srbear"
+          },
+          "op": "on"
+        }
+      ],
+      "sl": {
+        "mult": 0.1,
+        "unit": "zone"
+      },
+      "tp": {
+        "mult": 2,
+        "unit": "rr"
+      }
+    },
+    {
+      "id": "c-conf",
+      "name": "Confluence: zone in the golden zone",
+      "buy": [
+        {
+          "a": {
+            "t": "pdbull"
+          },
+          "op": "on"
+        },
+        {
+          "a": {
+            "t": "gzbull"
+          },
+          "op": "on"
+        }
+      ],
+      "sell": [
+        {
+          "a": {
+            "t": "pdbear"
+          },
+          "op": "on"
+        },
+        {
+          "a": {
+            "t": "gzbear"
+          },
+          "op": "on"
+        }
+      ],
+      "sl": {
+        "mult": 0.1,
+        "unit": "zone"
+      },
+      "tp": {
+        "mult": 2.5,
+        "unit": "rr"
+      }
+    }
+  ]
+}
