@@ -1053,7 +1053,7 @@ const S={
   strategies:[],enabled:store.get("enabled",{}),show:"all",
   ov:Object.assign({fvg:true,ob:true,fib:true,sr:true,sg:true},store.get("ov2",{})),
   ses:Object.assign({tokyo:true,london:true,ny:true},store.get("ses",{})),
-  view:120,offset:0,hover:null,geom:null,
+  view:120,offset:null,hover:null,geom:null,
   alerts:[],seen:new Set(),sound:false,audio:null,
   ws:null,wantLive:true,reqId:0,curReq:0,ping:null,simTimer:null,spread:0,
 };
@@ -1239,7 +1239,7 @@ function onDeriv(m){
     S.bars=bars;
     const sym=S.symbols.find(s=>s.symbol===S.symbol);
     S.dec=m.pip_size!=null?+m.pip_size:sym&&sym.pip!=null?pipDec(sym.pip):S.dec;
-    S.forming=true;S.offset=0;S.seen=new Set();S.lastMsg=Date.now();
+    S.forming=true;S.offset=null;S.seen=new Set();S.lastMsg=Date.now();
     setSource("live","Live · Deriv");showOffline(null);
     liveBanner();
     refresh(true,false);
@@ -1336,7 +1336,7 @@ function genSim(){
     for(let j=0;j<n;j++){p*=Math.exp(sd*gauss()-sd*sd/2);if(p>b.h)b.h=p;if(p<b.l)b.l=p}
     b.c=p;bars.push(b);
   }
-  S.bars=bars;S.forming=true;S.offset=0;S.seen=new Set();
+  S.bars=bars;S.forming=true;S.offset=null;S.seen=new Set();
   refresh(true,false);
 }
 function simTick(){
@@ -1375,7 +1375,7 @@ function loadCSV(text,name){
   if(bars.length<30)return"Fewer than 30 rows could be read. Check the time and price columns.";
   bars.sort((a,b)=>a.t-b.t);
   S.wantLive=false;stopSim();dropSocket();showOffline(null);
-  S.bars=bars;S.forming=false;S.offset=0;S.seen=new Set();
+  S.bars=bars;S.forming=false;S.offset=null;S.seen=new Set();
   const step=bars.length>2?bars[bars.length-1].t-bars[bars.length-2].t:3600;
   S.gran=step>0?step:3600;
   const mx=Math.max(...bars.slice(-50).map(b=>b.c));const frac=bars.slice(-20).map(b=>String(b.c).split(".")[1]||"").reduce((a,s)=>Math.max(a,s.length),0);
@@ -1422,19 +1422,24 @@ function drawChart(){
   ctx.font="12px "+mono;
   if(N<2){ctx.fillStyle=C.muted;ctx.textAlign="center";ctx.fillText("Loading candles…",W/2,H/2);S.geom=null;return}
   const axisW=Math.min(96,Math.max(72,W*0.11)),timeH=22,padT=12,pw=W-axisW,ph=H-timeH-padT;
-  const view=Math.min(S.view,N);S.offset=Math.max(0,Math.min(S.offset,N-view));
-  const end=N-S.offset,start=Math.max(0,end-view),slot=pw/view;
+  // Offset counts candles back from the newest one; negative leaves empty space on the right.
+  // null means "follow the latest candle" with a default gap of about 15% of the view.
+  const view=Math.min(S.view,N),maxPad=Math.floor(view*0.7),autoPad=Math.max(4,Math.round(view*0.15));
+  let off=S.offset==null?-autoPad:Math.max(-maxPad,Math.min(S.offset,N-view));
+  if(S.offset!=null)S.offset=off;
+  const end=N-off,start=Math.max(0,end-view),endB=Math.min(end,N),slot=pw/view;
+  const tAt=i=>i<N?B[i].t:B[N-1].t+(i-N+1)*S.gran;
   const R=S.smc;
   let lo=Infinity,hi=-Infinity;
-  for(let i=start;i<end;i++){lo=Math.min(lo,B[i].l);hi=Math.max(hi,B[i].h)}
+  for(let i=start;i<endB;i++){lo=Math.min(lo,B[i].l);hi=Math.max(hi,B[i].h)}
   const pad=(hi-lo)*0.08||1;lo-=pad;hi+=pad;
   const y=p=>padT+(hi-p)/(hi-lo)*ph,x=i=>(i-start+0.5)*slot;
-  S.geom={start,end,slot,pw,ph,padT,lo,hi,axisW,H,W};
+  S.geom={start,end,endB,off,slot,pw,ph,padT,lo,hi,axisW,H,W};
   // grid
   const step=niceStep(hi-lo,6);ctx.strokeStyle=C.line;ctx.lineWidth=1;ctx.fillStyle=C.muted;ctx.textAlign="left";ctx.textBaseline="middle";
   for(let v=Math.ceil(lo/step)*step;v<=hi;v+=step){const yy=Math.round(y(v))+.5;ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(pw,yy);ctx.stroke();ctx.fillText(fmt(v,Math.max(0,Math.min(S.dec,-Math.floor(Math.log10(step))+1))),pw+6,yy)}
   const tstep=Math.max(1,Math.ceil(84/slot));ctx.textAlign="center";ctx.textBaseline="top";
-  for(let i=start;i<end;i++){if(i%tstep)continue;const xx=Math.round(x(i))+.5;ctx.strokeStyle=C.line;ctx.beginPath();ctx.moveTo(xx,padT);ctx.lineTo(xx,padT+ph);ctx.stroke();ctx.fillStyle=C.muted;ctx.fillText(fmtTime(B[i].t),xx,padT+ph+5)}
+  for(let i=start;i<end;i++){if(i%tstep)continue;const xx=Math.round(x(i))+.5;ctx.strokeStyle=C.line;ctx.beginPath();ctx.moveTo(xx,padT);ctx.lineTo(xx,padT+ph);ctx.stroke();ctx.fillStyle=C.muted;ctx.fillText(fmtTime(tAt(i)),xx,padT+ph+5)}
   ctx.save();ctx.beginPath();ctx.rect(0,0,pw,padT+ph);ctx.clip();
   ctx.font="11px "+mono;
   const labels=[];// drawn after the candles so nothing covers them
@@ -1451,7 +1456,7 @@ function drawChart(){
         ctx.globalAlpha=.85;ctx.fillRect(x0,rowY+rowH-laneH,x1-x0,laneH);ctx.globalAlpha=1;
         if(x1-x0>46)labels.push(()=>{ctx.font="10.5px "+mono;ctx.fillStyle=col;ctx.textAlign="left";ctx.textBaseline="bottom";ctx.fillText(o.s.name,Math.max(2,x0+3),rowY+rowH-laneH-1);ctx.font="11px "+mono});
         runStart=-1};
-      for(let i=start;i<end;i++){const on=!!(sesMask(B[i].t+Math.min(S.gran,3600)/2)&1<<o.i);if(on&&runStart<0)runStart=i;if(!on)flush(i)}
+      for(let i=start;i<end;i++){const on=!!(sesMask(tAt(i)+Math.min(S.gran,3600)/2)&1<<o.i);if(on&&runStart<0)runStart=i;if(!on)flush(i)}
       flush(end);
     });
   }
@@ -1495,7 +1500,7 @@ function drawChart(){
       ctx.fillStyle=C.level;ctx.textAlign="left";ctx.textBaseline="bottom";ctx.fillText(lab,7,yy-3)})}}
   // candles
   const bw=Math.max(1,Math.min(14,slot*0.64));
-  for(let i=start;i<end;i++){const b=B[i],upc=b.c>=b.o,col=upc?C.up:C.down,xx=x(i);ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1;
+  for(let i=start;i<endB;i++){const b=B[i],upc=b.c>=b.o,col=upc?C.up:C.down,xx=x(i);ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(Math.round(xx)+.5,y(b.h));ctx.lineTo(Math.round(xx)+.5,y(b.l));ctx.stroke();
     const y1=y(Math.max(b.o,b.c)),y2=y(Math.min(b.o,b.c));ctx.fillRect(xx-bw/2,y1,bw,Math.max(1,y2-y1))}
   // signals
@@ -1516,7 +1521,7 @@ function drawChart(){
   if(ly>padT&&ly<padT+ph){ctx.strokeStyle=lc;ctx.setLineDash([2,3]);ctx.beginPath();ctx.moveTo(0,ly);ctx.lineTo(pw,ly);ctx.stroke();ctx.setLineDash([])}
   const lyc=Math.max(padT+9,Math.min(padT+ph-9,ly));tag(ctx,pw,lyc,axisW,fmt(L.c),lc,"#fff");
   // crosshair
-  if(S.hover&&S.hover.x<pw){const i=Math.max(start,Math.min(end-1,start+Math.floor(S.hover.x/slot)));const b=B[i];
+  if(S.hover&&S.hover.x<pw){const i=Math.max(start,Math.min(endB-1,start+Math.floor(S.hover.x/slot)));const b=B[i];
     ctx.strokeStyle=C.muted;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(Math.round(x(i))+.5,padT);ctx.lineTo(Math.round(x(i))+.5,padT+ph);ctx.moveTo(0,Math.round(S.hover.y)+.5);ctx.lineTo(pw,Math.round(S.hover.y)+.5);ctx.stroke();ctx.setLineDash([]);
     const pv=hi-(S.hover.y-padT)/ph*(hi-lo);if(S.hover.y>padT&&S.hover.y<padT+ph)tag(ctx,pw,S.hover.y,axisW,fmt(pv),C.line2,C.fg);
     const up=b.c>=b.o;ctx.textAlign="left";ctx.textBaseline="top";ctx.fillStyle=C.panel;ctx.globalAlpha=.85;ctx.fillRect(4,2,Math.min(pw-8,560),18);ctx.globalAlpha=1;
@@ -1527,14 +1532,14 @@ function tag(ctx,x0,yc,w,text,bg,fg){ctx.fillStyle=bg;ctx.fillRect(x0+1,yc-9,w-2
 /* ---------- chart interaction ---------- */
 function bindChart(){
   const el=$("#chartWrap");let drag=null;
-  el.addEventListener("pointerdown",e=>{drag={x:e.clientX,off:S.offset};el.setPointerCapture(e.pointerId)});
+  el.addEventListener("pointerdown",e=>{drag={x:e.clientX,off:S.geom?S.geom.off:0};el.setPointerCapture(e.pointerId)});
   el.addEventListener("pointermove",e=>{const r=el.getBoundingClientRect();
-    if(drag&&S.geom){const d=Math.round((e.clientX-drag.x)/S.geom.slot);S.offset=Math.max(0,drag.off+d);S.hover=null}else S.hover={x:e.clientX-r.left,y:e.clientY-r.top};drawAll()});
+    if(drag&&S.geom){const d=Math.round((e.clientX-drag.x)/S.geom.slot);S.offset=drag.off+d;S.hover=null}else S.hover={x:e.clientX-r.left,y:e.clientY-r.top};drawAll()});
   el.addEventListener("pointerup",()=>{drag=null});
   el.addEventListener("pointerleave",()=>{S.hover=null;drawAll()});
   el.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY>0?1.15:1/1.15)},{passive:false});
   $("#zoomIn").onclick=()=>zoom(1/1.25);$("#zoomOut").onclick=()=>zoom(1.25);
-  $("#toLatest").onclick=()=>{S.offset=0;drawAll()};
+  $("#toLatest").onclick=()=>{S.offset=null;drawAll()};
   new ResizeObserver(()=>drawAll()).observe(el);
 }
 function zoom(f){S.view=Math.round(Math.max(30,Math.min(Math.min(600,S.bars.length||600),S.view*f)));drawAll()}
