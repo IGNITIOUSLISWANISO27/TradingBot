@@ -1,0 +1,54 @@
+# Checks Deriv for new signals every 5 minutes and sends them to Telegram,
+# whether or not the bot page or the Streamlit app is open.
+name: Signal alerts
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Send a test message to Telegram now"
+        type: boolean
+        default: true
+
+# Only one check at a time, so the same signal is never sent twice.
+concurrency:
+  group: signal-alerts
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Remember which candles were already checked (kept between runs).
+      - name: Load last check
+        uses: actions/cache/restore@v4
+        with:
+          path: .alert-state
+          key: alert-state-${{ github.run_id }}
+          restore-keys: alert-state-
+
+      - name: Check for signals
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ALERT_TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test && '1' || '0' }}
+        run: node alert-worker.js
+
+      - name: Save last check
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .alert-state
+          key: alert-state-${{ github.run_id }}
